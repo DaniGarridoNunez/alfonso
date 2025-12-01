@@ -5,11 +5,42 @@ import { UpgradeList } from './components/UpgradeList';
 import { FloatingIndicators } from './components/FloatingIndicators';
 import { getVictimReaction } from './services/geminiService';
 
+const STORAGE_KEY = 'colleja-clicker-save';
+
+interface SaveData {
+  score: number;
+  totalScore: number;
+  upgradeCounts: Record<string, number>;
+}
+
+function loadSaveData(): SaveData | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Error loading save data:', e);
+  }
+  return null;
+}
+
+function getInitialUpgrades(): Upgrade[] {
+  const saved = loadSaveData();
+  if (saved?.upgradeCounts) {
+    return INITIAL_UPGRADES.map(upgrade => ({
+      ...upgrade,
+      count: saved.upgradeCounts[upgrade.id] ?? 0
+    }));
+  }
+  return INITIAL_UPGRADES;
+}
+
 export default function App() {
-  // Game State
-  const [score, setScore] = useState<number>(0);
-  const [totalScore, setTotalScore] = useState<number>(0); // Lifetime score
-  const [upgrades, setUpgrades] = useState<Upgrade[]>(INITIAL_UPGRADES);
+  // Game State - Load from localStorage if available
+  const [score, setScore] = useState<number>(() => loadSaveData()?.score ?? 0);
+  const [totalScore, setTotalScore] = useState<number>(() => loadSaveData()?.totalScore ?? 0);
+  const [upgrades, setUpgrades] = useState<Upgrade[]>(getInitialUpgrades);
   
   // Visual State
   const [isAnimating, setIsAnimating] = useState(false);
@@ -39,6 +70,16 @@ export default function App() {
   useEffect(() => {
     stateRef.current = { score, totalScore, autoClicksPerSecond, isTalking };
   }, [score, totalScore, autoClicksPerSecond, isTalking]);
+
+  // Save to localStorage
+  useEffect(() => {
+    const saveData: SaveData = {
+      score,
+      totalScore,
+      upgradeCounts: upgrades.reduce((acc, u) => ({ ...acc, [u.id]: u.count }), {})
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+  }, [score, totalScore, upgrades]);
 
   // --- Game Loop (Passive Income) ---
   useEffect(() => {
